@@ -82,4 +82,24 @@ def get_ovation_prime_data(request):
 
     logger.debug('success calculated')
 
-    return JsonResponse(data, safe=False)
+    data_type = 'hallgrid'
+    data = data[data_type]
+
+    def parse(data):
+        value = data['value']
+        mlat = data['mlat']
+        mlt = data['mlt']
+        latitude = mlat
+        longitude = mlt * 15 - 180
+        return [longitude, latitude, value]
+
+    parsed_data = [parse(val) for val in data]
+
+    result = {
+        "Observation Time": now_str,
+        "Forecast Time": _dt,
+        "Data Format": f"[Longitude, Latitude, {data_type}]",
+        "coordinates": parsed_data
+    }
+
+    return JsonResponse(result, safe=False)
