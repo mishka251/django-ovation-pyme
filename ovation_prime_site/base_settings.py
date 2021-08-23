@@ -106,7 +106,7 @@ USE_I18N = True
 
 USE_L10N = True
 
-USE_TZ = True
+USE_TZ = False
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/3.2/howto/static-files/
@@ -117,9 +117,6 @@ STATIC_URL = '/static/'
 # https://docs.djangoproject.com/en/3.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-
-# сетки по широте и долготе
-MLAT_GRID, MLT_GRID = np.meshgrid(np.linspace(60., 80., 40), np.linspace(2., 6., 30))
 
 LOGGING = {
     'version': 1,
@@ -171,3 +168,10 @@ LOGGING = {
         },
     },
 }
+
+
+# сетки по широте и долготе для северв
+NORTH_MLAT_GRID, NORTH_MLT_GRID = np.meshgrid(np.linspace(60., 90., 90), np.linspace(0., 12., 90))
+
+SOUTH_MLAT_GRID, SOUTH_MLT_GRID = np.meshgrid(np.linspace(-90., -60., 90), np.linspace(0., 12., 90))
+
