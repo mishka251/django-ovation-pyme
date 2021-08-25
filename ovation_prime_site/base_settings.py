@@ -175,3 +175,4 @@ NORTH_MLAT_GRID, NORTH_MLT_GRID = np.meshgrid(np.linspace(60., 90., 90), np.lins
 
 SOUTH_MLAT_GRID, SOUTH_MLT_GRID = np.meshgrid(np.linspace(-90., -60., 90), np.linspace(0., 12., 90))
 
+PROXY_API_URL = 'https://app.zenscrape.com/api/v1/get'

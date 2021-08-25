@@ -30,3 +30,5 @@ DATABASES = {
         'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
+# ключ для прокси-сервера
+PROXY_API_KEY = ''
