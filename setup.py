@@ -3,7 +3,7 @@ from os.path import join, dirname
 
 setup(
     name='django-ovation-prime',
-    version='0.1.0',
+    version='0.1.1',
     install_requires=[
         'Django >= 3.2.0',
         'numpy >= 1.21.0',
