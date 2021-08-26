@@ -4,8 +4,9 @@ import os
 import pathlib
 import shutil
 
-from setuptools import setup, Command,find_packages
+from setuptools import setup, Command, find_packages
 from os.path import join, dirname
+
 
 # https://github.com/pypa/setuptools/issues/1347
 class CleanCommand(Command):
@@ -34,10 +35,9 @@ class CleanCommand(Command):
                 shutil.rmtree(path)
 
 
-
 setup(
     name='django-ovation-prime',
-    version='0.1.2',
+    version='0.1.3',
     install_requires=[
         'Django >= 3.2.0',
         'numpy >= 1.21.0',
@@ -54,5 +54,5 @@ setup(
         'clean': CleanCommand,
         # 'install': CustomInstallCommand,
     },
-
+    include_package_data=True,
 )
