@@ -7,7 +7,7 @@ import logging
 # Get an instance of a logger
 from typing import TypedDict, List
 
-from django.forms import Form, DateTimeField, ChoiceField
+from django.forms import Form, DateTimeField, ChoiceField, DecimalField
 from django.forms.utils import ErrorDict
 
 logger = logging.getLogger(__name__)
@@ -257,3 +257,79 @@ def get_weighted_flux(request):
 
     logger.debug('success calculated')
     return JsonResponse(result, safe=False)
+
+
+season_choices = [
+    ('winter', 'winter'),
+    ('spring', 'spring'),
+    ('summer', 'summer'),
+    ('fall', 'fall'),
+]
+
+class SeasonalFluxForm(Form):
+    dt = DateTimeField(required=True)
+    atype = ChoiceField(choices=[('diff', 'diff'), ('mono', 'mono'), ('wave', 'wave'), ('ions', 'ions')],
+                        initial='diff', required=False)
+    jtype = ChoiceField(choices=[('energy', 'energy'), ('number', 'number')], initial='energy', required=False)
+
+    seasonN = ChoiceField(choices=season_choices, initial='summer', required=False)
+    seasonS = ChoiceField(choices=season_choices, initial='winter', required=False)
+
+    dF = DecimalField(required=False, initial=2134.17)
+
+
+
+def get_seasonal_flux(request):
+    """
+    Отдаем json с данными для построения графиков из
+    draw_weighted_flux
+    Параметры запроса
+    :dt: - датавремя в формате `yyyy-mm-ddTHH:MM:SS`
+    :atype: - str, ['diff','mono','wave','ions']
+            type of aurora for which to load regression coeffients
+    :jtype: - str, ['energy','number']
+            Type of flux you want to estimate
+    """
+    form = SeasonalFluxForm(request.GET)
+    is_valid = form.is_valid()
+    if not is_valid:
+        return HttpResponseBadRequest(form.errors.as_json())
+
+    dt = form.cleaned_data['dt']
+    atype = form.cleaned_data['atype'] or form.fields['atype'].initial
+    jtype = form.cleaned_data['jtype'] or form.fields['jtype'].initial
+
+    season_n = form.cleaned_data['seasonN'] or form.fields['seasonN'].initial
+    season_s = form.cleaned_data['seasonS'] or form.fields['seasonS'].initial
+
+    dF = form.cleaned_data['dF'] or form.fields['dF'].initial
+
+    estimatorN = ovation_prime.SeasonalFluxEstimator(season_n, atype, jtype)
+    estimatorS = ovation_prime.SeasonalFluxEstimator(season_s, atype, jtype)
+
+    fluxtupleN = estimatorN.get_gridded_flux(dF, combined_N_and_S=False)
+    (mlatgridN, mltgridN, fluxgridN) = fluxtupleN[:3]
+
+    fluxtupleS = estimatorS.get_gridded_flux(dF, combined_N_and_S=False)
+    (mlatgridS, mltgridS, fluxgridS) = fluxtupleS[3:]
+
+    _data = [
+        *grids_to_dicts(mlatgridN, mltgridN, fluxgridN),
+        *grids_to_dicts(mlatgridS, mltgridS, fluxgridS),
+    ]
+
+    now = datetime.datetime.now()
+    now_str = now.strftime('%Y_%m_%d_%H_%M_%S_%f')
+
+    parsed_data = [parse(val) for val in _data]
+
+    result = {
+        "Observation Time": now_str,
+        "Forecast Time": str(dt),
+        "Data Format": f"[Longitude, Latitude, seasonal_flux]",
+        "coordinates": parsed_data
+    }
+
+    logger.debug('success calculated')
+    return JsonResponse(result, safe=False)
+
