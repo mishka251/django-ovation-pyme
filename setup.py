@@ -37,11 +37,11 @@ class CleanCommand(Command):
 
 setup(
     name='django-ovation-prime',
-    version='0.1.3',
+    version='0.1.4',
     install_requires=[
         'Django >= 3.2.0',
         'numpy >= 1.21.0',
-        'OvationPyme @ git+https://github.com/mishka251/OvationPyme.git@0.1.3#egg=ovationpyme',
+        'OvationPyme @ git+https://github.com/mishka251/OvationPyme.git@0.1.4#egg=ovationpyme',
         'nasaomnireader @ git+https://github.com/mishka251/nasaomnireader.git@0.1.2#egg=nasaomnireader'
     ],
     dependency_links=[
