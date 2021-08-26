@@ -86,50 +86,48 @@ def get_ovation_prime_conductance_interpolated(request):
     :dt: - датавремя в формате `yyyy-mm-ddTHH:MM:SS`
     :type: тип расчётов? 'pedgrid' или  'hallgrid'
     """
+    form = OvationPrimeConductanceForm(request.GET)
+    is_valid = form.is_valid()
+    if not is_valid:
+        return HttpResponseBadRequest(form.errors.get_json_data())
 
-    with cProfile.Profile() as pf:
-        form = OvationPrimeConductanceForm(request.GET)
-        is_valid = form.is_valid()
-        if not is_valid:
-            return HttpResponseBadRequest(form.errors.get_json_data())
+    dt = form.cleaned_data['dt']
+    _type = form.cleaned_data['_type']
 
-        dt = form.cleaned_data['dt']
-        _type = form.cleaned_data['_type']
+    new_north_mlat_grid = get_north_mlat_grid()
+    new_north_mlt_grid = get_north_mlt_grid()
 
-        new_north_mlat_grid = get_north_mlat_grid()
-        new_north_mlt_grid = get_north_mlt_grid()
+    new_south_mlat_grid = get_south_mlat_grid()
+    new_south_mlt_grid = get_south_mlt_grid()
 
-        new_south_mlat_grid = get_south_mlat_grid()
-        new_south_mlt_grid = get_south_mlt_grid()
+    estimator = ovation_prime.ConductanceEstimator(fluxtypes=['diff', 'mono'])
 
-        estimator = ovation_prime.ConductanceEstimator(fluxtypes=['diff', 'mono'])
+    north_mlatgrid, north_mltgrid, north_pedgrid, north_hallgrid = estimator.get_conductance(dt, hemi='N',
+                                                                                             auroral=True,
+                                                                                             solar=True)
 
-        north_mlatgrid, north_mltgrid, north_pedgrid, north_hallgrid = estimator.get_conductance(dt, hemi='N',
-                                                                                                 auroral=True,
-                                                                                                 solar=True)
+    south_mlatgrid, south_mltgrid, south_pedgrid, south_hallgrid = estimator.get_conductance(dt, hemi='S',
+                                                                                             auroral=True,
+                                                                                             solar=True)
 
-        south_mlatgrid, south_mltgrid, south_pedgrid, south_hallgrid = estimator.get_conductance(dt, hemi='S',
-                                                                                                 auroral=True,
-                                                                                                 solar=True)
+    if _type == 'pedgrid':
+        north_interpolator = ovation_prime.LatLocaltimeInterpolator(north_mlatgrid, north_mltgrid, north_pedgrid)
+        north_new_values = north_interpolator.interpolate(new_north_mlat_grid, new_north_mlt_grid)
 
-        if _type == 'pedgrid':
-            north_interpolator = ovation_prime.LatLocaltimeInterpolator(north_mlatgrid, north_mltgrid, north_pedgrid)
-            north_new_values = north_interpolator.interpolate(new_north_mlat_grid, new_north_mlt_grid)
+        south_interpolator = ovation_prime.LatLocaltimeInterpolator(south_mlatgrid, south_mltgrid, south_pedgrid)
+        south_new_values = south_interpolator.interpolate(new_south_mlat_grid, new_south_mlt_grid)
 
-            south_interpolator = ovation_prime.LatLocaltimeInterpolator(south_mlatgrid, south_mltgrid, south_pedgrid)
-            south_new_values = south_interpolator.interpolate(new_south_mlat_grid, new_south_mlt_grid)
+    else:
+        north_interpolator = ovation_prime.LatLocaltimeInterpolator(north_mlatgrid, north_mltgrid, north_hallgrid)
+        north_new_values = north_interpolator.interpolate(new_north_mlat_grid, new_north_mlt_grid)
 
-        else:
-            north_interpolator = ovation_prime.LatLocaltimeInterpolator(north_mlatgrid, north_mltgrid, north_hallgrid)
-            north_new_values = north_interpolator.interpolate(new_north_mlat_grid, new_north_mlt_grid)
+        south_interpolator = ovation_prime.LatLocaltimeInterpolator(south_mlatgrid, south_mltgrid, south_hallgrid)
+        south_new_values = south_interpolator.interpolate(new_south_mlat_grid, new_south_mlt_grid)
 
-            south_interpolator = ovation_prime.LatLocaltimeInterpolator(south_mlatgrid, south_mltgrid, south_hallgrid)
-            south_new_values = south_interpolator.interpolate(new_south_mlat_grid, new_south_mlt_grid)
-
-        _data = [
-            *grids_to_dicts(new_north_mlat_grid, new_north_mlt_grid, north_new_values),
-            *grids_to_dicts(new_south_mlat_grid, new_south_mlt_grid, south_new_values),
-        ]
+    _data = [
+        *grids_to_dicts(new_north_mlat_grid, new_north_mlt_grid, north_new_values),
+        *grids_to_dicts(new_south_mlat_grid, new_south_mlt_grid, south_new_values),
+    ]
 
     now = datetime.datetime.now()
     now_str = now.strftime('%Y_%m_%d_%H_%M_%S_%f')
@@ -143,7 +141,6 @@ def get_ovation_prime_conductance_interpolated(request):
         "coordinates": parsed_data
     }
 
-    pf.dump_stats(f'profile_{now_str}.pstat')
 
     logger.debug('success calculated')
     return JsonResponse(result, safe=False)
@@ -157,36 +154,35 @@ def get_ovation_prime_conductance(request):
     :type: тип расчётов? 'pedgrid' или  'hallgrid'
     """
 
-    with cProfile.Profile() as pf:
-        form = OvationPrimeConductanceForm(request.GET)
-        is_valid = form.is_valid()
-        if not is_valid:
-            return HttpResponseBadRequest(form.errors.get_json_data())
+    form = OvationPrimeConductanceForm(request.GET)
+    is_valid = form.is_valid()
+    if not is_valid:
+        return HttpResponseBadRequest(form.errors.get_json_data())
 
-        dt = form.cleaned_data['dt']
-        _type = form.cleaned_data['_type']
+    dt = form.cleaned_data['dt']
+    _type = form.cleaned_data['_type']
 
-        estimator = ovation_prime.ConductanceEstimator(fluxtypes=['diff', 'mono'])
+    estimator = ovation_prime.ConductanceEstimator(fluxtypes=['diff', 'mono'])
 
-        north_mlatgrid, north_mltgrid, north_pedgrid, north_hallgrid = estimator.get_conductance(dt, hemi='N',
-                                                                                                 auroral=True,
-                                                                                                 solar=True)
+    north_mlatgrid, north_mltgrid, north_pedgrid, north_hallgrid = estimator.get_conductance(dt, hemi='N',
+                                                                                             auroral=True,
+                                                                                             solar=True)
 
-        south_mlatgrid, south_mltgrid, south_pedgrid, south_hallgrid = estimator.get_conductance(dt, hemi='S',
-                                                                                                 auroral=True,
-                                                                                                 solar=True)
+    south_mlatgrid, south_mltgrid, south_pedgrid, south_hallgrid = estimator.get_conductance(dt, hemi='S',
+                                                                                             auroral=True,
+                                                                                             solar=True)
 
-        if _type == 'pedgrid':
-            north_data = north_pedgrid
-            south_data = south_pedgrid
-        else:
-            north_data = north_hallgrid
-            south_data = south_mlatgrid
+    if _type == 'pedgrid':
+        north_data = north_pedgrid
+        south_data = south_pedgrid
+    else:
+        north_data = north_hallgrid
+        south_data = south_mlatgrid
 
-        _data = [
-            *grids_to_dicts(north_mlatgrid, north_mltgrid, north_data),
-            *grids_to_dicts(south_mlatgrid, south_mltgrid, south_data),
-        ]
+    _data = [
+        *grids_to_dicts(north_mlatgrid, north_mltgrid, north_data),
+        *grids_to_dicts(south_mlatgrid, south_mltgrid, south_data),
+    ]
 
     now = datetime.datetime.now()
     now_str = now.strftime('%Y_%m_%d_%H_%M_%S_%f')
@@ -199,8 +195,6 @@ def get_ovation_prime_conductance(request):
         "Data Format": f"[Longitude, Latitude, {_type}]",
         "coordinates": parsed_data
     }
-
-    pf.dump_stats(f'profile_{now_str}.pstat')
 
     logger.debug('success calculated')
     return JsonResponse(result, safe=False)
