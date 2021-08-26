@@ -35,18 +35,22 @@ class CleanCommand(Command):
                 shutil.rmtree(path)
 
 
+NASA_OMNI_READER_VERSION = '0.1.2'
+OVATION_PYME_VERSION = '0.1.4'
+
+
 setup(
     name='django-ovation-prime',
     version='0.1.4',
     install_requires=[
         'Django >= 3.2.0',
         'numpy >= 1.21.0',
-        'OvationPyme @ git+https://github.com/mishka251/OvationPyme.git@0.1.4#egg=ovationpyme',
-        'nasaomnireader @ git+https://github.com/mishka251/nasaomnireader.git@0.1.2#egg=nasaomnireader'
+        f'OvationPyme @ git+https://github.com/mishka251/OvationPyme.git@{OVATION_PYME_VERSION}#egg=ovationpyme',
+        f'nasaomnireader @ git+https://github.com/mishka251/nasaomnireader.git@{NASA_OMNI_READER_VERSION}#egg=nasaomnireader'
     ],
     dependency_links=[
-        # 'git+https://github.com/mishka251/OvationPyme.git@0.1.1#egg=ovationpyme',
-        # 'git+https://github.com/mishka251/nasaomnireader.git@0.1.1#egg=nasaomnireader'
+        f'git+https://github.com/mishka251/OvationPyme.git@{OVATION_PYME_VERSION}#egg=ovationpyme',
+        f'git+https://github.com/mishka251/nasaomnireader.git@{NASA_OMNI_READER_VERSION}#egg=nasaomnireader'
     ],
     packages=find_packages(),
     long_description=open(join(dirname(__file__), 'readme.md')).read(),
