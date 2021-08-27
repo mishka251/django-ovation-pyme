@@ -283,6 +283,8 @@ def get_seasonal_flux(request):
             type of aurora for which to load regression coeffients
     :jtype: - str, ['energy','number']
             Type of flux you want to estimate
+    :seasonN: str ['winter', 'summer', 'spring', 'fall']
+    :seasonS: str ['winter', 'summer', 'spring', 'fall']
     """
     form = SeasonalFluxForm(request.GET)
     is_valid = form.is_valid()
