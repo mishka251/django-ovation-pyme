@@ -102,11 +102,11 @@ def get_ovation_prime_conductance_interpolated(request):
 
     estimator = ovation_prime.ConductanceEstimator(fluxtypes=['diff', 'mono'])
 
-    north_mlatgrid, north_mltgrid, north_pedgrid, north_hallgrid = estimator.get_conductance(dt, hemi='N',
+    north_mlatgrid, north_mltgrid, north_pedgrid, north_hallgrid, oi = estimator.get_conductance(dt, hemi='N',
                                                                                              auroral=True,
                                                                                              solar=True)
 
-    south_mlatgrid, south_mltgrid, south_pedgrid, south_hallgrid = estimator.get_conductance(dt, hemi='S',
+    south_mlatgrid, south_mltgrid, south_pedgrid, south_hallgrid, oi = estimator.get_conductance(dt, hemi='S',
                                                                                              auroral=True,
                                                                                              solar=True)
 
@@ -134,8 +134,10 @@ def get_ovation_prime_conductance_interpolated(request):
 
     parsed_data = [parse(val) for val in _data]
 
+    print(oi)
+
     result = {
-        "Observation Time": now_str,
+        "Observation Time": [str(oi.startdt), str(oi.enddt)],
         "Forecast Time": str(dt),
         "Data Format": f"[Longitude, Latitude, {_type}]",
         "coordinates": parsed_data
@@ -164,11 +166,11 @@ def get_ovation_prime_conductance(request):
 
     estimator = ovation_prime.ConductanceEstimator(fluxtypes=['diff', 'mono'])
 
-    north_mlatgrid, north_mltgrid, north_pedgrid, north_hallgrid = estimator.get_conductance(dt, hemi='N',
+    north_mlatgrid, north_mltgrid, north_pedgrid, north_hallgrid, oi = estimator.get_conductance(dt, hemi='N',
                                                                                              auroral=True,
                                                                                              solar=True)
 
-    south_mlatgrid, south_mltgrid, south_pedgrid, south_hallgrid = estimator.get_conductance(dt, hemi='S',
+    south_mlatgrid, south_mltgrid, south_pedgrid, south_hallgrid, oi = estimator.get_conductance(dt, hemi='S',
                                                                                              auroral=True,
                                                                                              solar=True)
 
@@ -189,8 +191,10 @@ def get_ovation_prime_conductance(request):
 
     parsed_data = [parse(val) for val in _data]
 
+    print(oi)
+
     result = {
-        "Observation Time": now_str,
+        "Observation Time": [str(oi.startdt), str(oi.enddt)],
         "Forecast Time": str(dt),
         "Data Format": f"[Longitude, Latitude, {_type}]",
         "coordinates": parsed_data
@@ -229,8 +233,8 @@ def get_weighted_flux(request):
 
     estimator = ovation_prime.FluxEstimator(atype, jtype)
 
-    mlatgridN, mltgridN, fluxgridN = estimator.get_flux_for_time(dt, hemi='N')
-    mlatgridS, mltgridS, fluxgridS = estimator.get_flux_for_time(dt, hemi='S')
+    mlatgridN, mltgridN, fluxgridN, oi = estimator.get_flux_for_time(dt, hemi='N')
+    mlatgridS, mltgridS, fluxgridS, oi = estimator.get_flux_for_time(dt, hemi='S')
 
     _data = [
         *grids_to_dicts(mlatgridN, mltgridN, fluxgridN),
@@ -243,7 +247,7 @@ def get_weighted_flux(request):
     parsed_data = [parse(val) for val in _data]
 
     result = {
-        "Observation Time": now_str,
+        "Observation Time": [str(oi.startdt), str(oi.enddt)],
         "Forecast Time": str(dt),
         "Data Format": f"[Longitude, Latitude, weighted_flux]",
         "coordinates": parsed_data
