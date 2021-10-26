@@ -151,19 +151,23 @@ LOGGING = {
     # },
     'loggers': {
         'ovationpyme': {
-            'handlers': ['file'],
+            'handlers': ['file', 'console'],
             'level': 'DEBUG',
         },
+        'django': {
+            'handlers': ['file', 'console'],
+            'level': 'INFO',
+        },
         'nasaomnireader': {
-            'handlers': ['file'],
+            'handlers': ['file', 'console'],
             'level': 'DEBUG',
         },
         'ovation_prime_app': {
-            'handlers': ['file'],
+            'handlers': ['file', 'console'],
             'level': 'DEBUG',
         },
         'OvationPyme': {
-            'handlers': ['file'],
+            'handlers': ['file', 'console'],
             'level': 'DEBUG',
         },
     },
@@ -171,8 +175,8 @@ LOGGING = {
 
 
 # сетки по широте и долготе для северв
-NORTH_MLAT_GRID, NORTH_MLT_GRID = np.meshgrid(np.linspace(00., 90., 360), np.linspace(0., 24., 90))
+NORTH_MLAT_GRID, NORTH_MLT_GRID = np.meshgrid(np.linspace(00., 90., 45), np.linspace(0., 24., 180))
 
-SOUTH_MLAT_GRID, SOUTH_MLT_GRID = np.meshgrid(np.linspace(-90., 00., 360), np.linspace(0., 24., 90))
+SOUTH_MLAT_GRID, SOUTH_MLT_GRID = np.meshgrid(np.linspace(-90., -00., 45), np.linspace(0., 24., 180))
 
 PROXY_API_URL = 'https://app.zenscrape.com/api/v1/get'
