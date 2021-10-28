@@ -175,8 +175,8 @@ LOGGING = {
 
 
 # сетки по широте и долготе для северв
-NORTH_MLAT_GRID, NORTH_MLT_GRID = np.meshgrid(np.linspace(00., 90., 45), np.linspace(0., 24., 180))
+NORTH_MLAT_GRID, NORTH_MLT_GRID = np.meshgrid(np.linspace(00., 90., 45), np.linspace(0., 24., 90))
 
-SOUTH_MLAT_GRID, SOUTH_MLT_GRID = np.meshgrid(np.linspace(-90., -00., 45), np.linspace(0., 24., 180))
+SOUTH_MLAT_GRID, SOUTH_MLT_GRID = np.meshgrid(np.linspace(-90., -00., 45), np.linspace(0., 24., 90))
 
 PROXY_API_URL = 'https://app.zenscrape.com/api/v1/get'

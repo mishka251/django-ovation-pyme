@@ -1,30 +1,26 @@
 # 2021.08.26 22:04
 import datetime
-import cProfile
 # import the logging library
 import logging
-
-# Get an instance of a logger
-import math
+import time
 from functools import cmp_to_key
 from typing import TypedDict, List
 
+# Get an instance of a logger
+import math
 import numpy as np
 from django.forms import Form, DateTimeField, ChoiceField, DecimalField
-from django.forms.utils import ErrorDict
 
 logger = logging.getLogger(__name__)
 
 from django.http import JsonResponse, HttpResponseBadRequest
-from django.shortcuts import render
 from django.conf import settings
 # Create your views here.
 
 import aacgmv2
 
 from ovationpyme import ovation_prime
-from auromat.coordinates.transform import smToLatLon
-
+from pyIGRF.loadCoeffs import get_coeffs
 
 class OvationPrimeData(TypedDict):
     value: float
@@ -48,15 +44,30 @@ def get_south_mlt_grid():
     return settings.SOUTH_MLT_GRID
 
 
-def mlt_to_lon(mlt: float) -> float:
-    return mlt * 15 - 180
+# def mlt_to_lon(mlt: float) -> float:
+#     return mlt * 15 - 180
+#
+#
+# def mlat_to_lat(mlat: float) -> float:
+#     return mlat
+
+def date_to_year(date: datetime.datetime) -> float:
+    def sinceEpoch(date): # returns seconds since epoch
+        return time.mktime(date.timetuple())
+    s = sinceEpoch
+
+    year = date.year
+    startOfThisYear = datetime.datetime(year=year, month=1, day=1)
+    startOfNextYear = datetime.datetime(year=year+1, month=1, day=1)
+
+    yearElapsed = s(date) - s(startOfThisYear)
+    yearDuration = s(startOfNextYear) - s(startOfThisYear)
+    fraction = yearElapsed/yearDuration
+
+    return date.year + fraction
 
 
-def mlat_to_lat(mlat: float) -> float:
-    return mlat
-
-
-def mag_to_geo(latMAG: float, longMAG: float) -> tuple[float, float, float]:
+def mag_to_geo(latMAG: float, longMAG: float, dt: datetime.datetime) -> tuple[float, float, float]:
     mag1_sgn = 1
     if longMAG > 180:
         longMAG = 360 - longMAG
@@ -84,9 +95,20 @@ def mag_to_geo(latMAG: float, longMAG: float) -> tuple[float, float, float]:
     if cos < 0:
         MAG[0] *= -1
 
-    h11 = 4797.1  #
-    g11 = -1501  # Сферические гармонические коэффициенты для эпохи 2015-2020
-    g10 = -29442  #
+    _h11 = 4797.1  #
+    _g11 = -1501  # Сферические гармонические коэффициенты для эпохи 2015-2020
+    _g10 = -29442  #
+
+    g, h = get_coeffs(date_to_year(dt))
+
+    h11 = h[1][1]
+    g11 = g[1][1]
+    g10 = g[1][0]
+
+    # print(g10,_g10)
+    # print(g11, _g11)
+    # print(h11, _h11)
+
     lamda = math.atan(h11 / g11)  # угол поворотота вокруг оси Y
     fi = - math.asin((g11 * math.cos(lamda) + h11 * math.sin(lamda)) / (g10))
 
@@ -154,17 +176,17 @@ def parse(data: OvationPrimeData, dt: datetime) -> [float, float, float]:
     value = data['value']
     mlat = data['mlat']
     mlt = data['mlt']
-    latitude = mlat_to_lat(mlat)
-    longitude = mlt_to_lon(mlt)
+    # latitude = mlat_to_lat(mlat)
+    # longitude = mlt_to_lon(mlt)
     mlon = aacgmv2.convert_mlt(mlt, dt, True)
     if mlon < 0:
         mlon += 360
-    mlon2 = (mlt * 24 + 180) % 360
+    # mlon2 = (mlt * 24 + 180) % 360
 
-    print(mlon, mlon2)
+    # print(mlon, mlon2)
 
-    test = smToLatLon([mlat], [mlon], dt)
-    test2 = mag_to_geo(mlat, mlon)
+    # test = smToLatLon([mlat], [mlon], dt)
+    test2 = mag_to_geo(mlat, mlon, dt)
 
     # print(test, [longitude, latitude])
     # longitude = test[1][0]
@@ -235,12 +257,36 @@ def plot(new_mlat_grid, new_mlt_grid, vals, hemi, dt, view_name: str):
     f.colorbar(mappableH, ax=aH)
     # f.colorbar(mappableP, ax=aP)
 
-    f.suptitlef("{2} {0} Hemisphere at {1}".format(hemi, dt.strftime('%c'), view_name),
+    f.suptitle("{2} {0} Hemisphere at {1}".format(hemi, dt.strftime('%c'), view_name),
                 fontweight='bold')
     f.savefig('{2}_{1}_{0}.png'.format(dt.strftime('%Y%m%d_%H%M%S'), hemi, view_name))
 
     # return f
 
+
+def fill_zeros(coordinates: list[dict]) -> list[dict]:
+    lats = [c['mlat'] for c in coordinates]
+    lons = [c['mlt'] for c in coordinates]
+
+    lats = list(sorted(set(lats)))
+    lons = list(sorted(set(lons)))
+
+    lat_diff = lats[1] - lats[0]
+
+    begin = lats[len(lats) // 2 - 1] + lat_diff
+    end = lats[len(lats) // 2]
+
+    for lat in np.arange(begin, end, lat_diff):
+        for lon in lons:
+            fix = {
+                'mlat': lat,
+                'mlt': lon,
+                'value': 0,
+
+            }
+            coordinates.append(fix)
+
+    return coordinates
 
 def get_ovation_prime_conductance_interpolated(request):
     """
@@ -421,7 +467,11 @@ def get_weighted_flux(request):
     now = datetime.datetime.now()
     now_str = now.strftime('%Y_%m_%d_%H_%M_%S_%f')
 
+    _data = fill_zeros(_data)
+
     parsed_data = [parse(val, dt) for val in _data]
+
+    # parsed_data = fill_zeros(parsed_data)
 
     result = {
         "Observation Time": [str(oi.startdt), str(oi.enddt)],
