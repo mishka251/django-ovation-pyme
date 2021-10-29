@@ -1,24 +1,26 @@
 # 2021.08.26 22:04
 import datetime
-import cProfile
 # import the logging library
 import logging
-
-# Get an instance of a logger
+import time
+from functools import cmp_to_key
 from typing import TypedDict, List
 
+# Get an instance of a logger
+import math
+import numpy as np
 from django.forms import Form, DateTimeField, ChoiceField, DecimalField
-from django.forms.utils import ErrorDict
 
 logger = logging.getLogger(__name__)
 
 from django.http import JsonResponse, HttpResponseBadRequest
-from django.shortcuts import render
 from django.conf import settings
 # Create your views here.
 
-from ovationpyme import ovation_prime
+import aacgmv2
 
+from ovationpyme import ovation_prime
+from pyIGRF.loadCoeffs import get_coeffs
 
 class OvationPrimeData(TypedDict):
     value: float
@@ -42,21 +44,171 @@ def get_south_mlt_grid():
     return settings.SOUTH_MLT_GRID
 
 
-def mlt_to_lon(mlt: float) -> float:
-    return mlt * 15 - 180
+# def mlt_to_lon(mlt: float) -> float:
+#     return mlt * 15 - 180
+#
+#
+# def mlat_to_lat(mlat: float) -> float:
+#     return mlat
+
+def date_to_year(date: datetime.datetime) -> float:
+    def sinceEpoch(date): # returns seconds since epoch
+        return time.mktime(date.timetuple())
+    s = sinceEpoch
+
+    year = date.year
+    startOfThisYear = datetime.datetime(year=year, month=1, day=1)
+    startOfNextYear = datetime.datetime(year=year+1, month=1, day=1)
+
+    yearElapsed = s(date) - s(startOfThisYear)
+    yearDuration = s(startOfNextYear) - s(startOfThisYear)
+    fraction = yearElapsed/yearDuration
+
+    return date.year + fraction
 
 
-def mlat_to_lat(mlat: float) -> float:
-    return mlat
+def mag_to_geo(latMAG: float, longMAG: float, dt: datetime.datetime) -> tuple[float, float, float]:
+    mag1_sgn = 1
+    if longMAG > 180:
+        longMAG = 360 - longMAG
+        mag1_sgn = -1
+
+    MAG = [0, 0, 0]
+
+    cos = math.cos(math.radians(longMAG))
+    tan = math.tan(math.radians(latMAG))
+
+    cos2 = cos * cos
+    tan2 = tan * tan
+
+    MAG[0] = cos2 * (1 - tan2 / (1 + tan2))
+    MAG[1] = MAG[0] * (1 / cos2 - 1)
+    MAG[2] = tan2 / (1 + tan2)
+
+    MAG[0] = math.sqrt(MAG[0])
+    MAG[1] = math.sqrt(MAG[1])
+    MAG[2] = math.sqrt(MAG[2])
+    if mag1_sgn == -1:
+        MAG[1] *= -1
+    if tan < 0:
+        MAG[2] *= -1
+    if cos < 0:
+        MAG[0] *= -1
+
+    _h11 = 4797.1  #
+    _g11 = -1501  # Сферические гармонические коэффициенты для эпохи 2015-2020
+    _g10 = -29442  #
+
+    g, h = get_coeffs(date_to_year(dt))
+
+    h11 = h[1][1]
+    g11 = g[1][1]
+    g10 = g[1][0]
+
+    # print(g10,_g10)
+    # print(g11, _g11)
+    # print(h11, _h11)
+
+    lamda = math.atan(h11 / g11)  # угол поворотота вокруг оси Y
+    fi = - math.asin((g11 * math.cos(lamda) + h11 * math.sin(lamda)) / (g10))
+
+    t5Y = [
+        [math.cos(fi), 0, math.sin(fi)],
+        [0, 1, 0],
+        [-math.sin(fi), 0, math.cos(fi)]
+    ]
+
+    # print(t5Y)
+
+    t5Z = [
+        [math.cos(lamda), math.sin(lamda), 0],
+        [-math.sin(lamda), math.cos(lamda), 0],
+        [0, 0, 1]
+    ]
+
+    # print(t5Z)
+
+    t5 = np.dot(t5Y, t5Z)
+    t5_inv = np.linalg.inv(t5)
+    GEO = np.dot(t5_inv, MAG)
+
+    rE = math.sqrt(GEO[0] * GEO[0] + GEO[1] * GEO[1] + GEO[2] * GEO[2])
+
+    x = GEO[0] / rE  # math.cos(latGEO) * math.cos(longGEO)
+    y = GEO[1] / rE  # math.cos(latGEO) * math.sin(longGEO)
+    z = GEO[2] / rE  # math.sin(latGEO)
+
+    _latGEO1 = math.asin(z)
+    if _latGEO1 > 0:
+        _latGEO2 = math.pi - _latGEO1
+    else:
+        _latGEO2 = -math.pi - _latGEO1
+
+    cos_lat1 = math.cos(_latGEO1)
+    cos_lat2 = math.cos(_latGEO2)
+
+    long_sin1 = y / cos_lat1
+    if long_sin1 > 1:
+        long_sin1 = 1
+    if long_sin1 < -1:
+        long_sin1 = -1
+    long_sin2 = y / cos_lat2
+    if long_sin2 > 1:
+        long_sin2 = 1
+    if long_sin2 < -1:
+        long_sin2 = -1
+
+    _longGEO1 = math.asin(long_sin1)
+    _longGEO3 = math.asin(long_sin2)
+
+    _x1 = math.cos(_latGEO1) * math.cos(_longGEO1)
+    _x3 = math.cos(_latGEO2) * math.cos(_longGEO3)
+    eps = 1e-6
+    if abs(x - _x1) < eps:
+        return _latGEO1, _longGEO1, 0
+    elif abs(x - _x3) < eps:
+        return _latGEO2, _longGEO3, 0
+    else:
+        raise ValueError()
 
 
-def parse(data: OvationPrimeData) -> [float, float, float]:
+def parse(data: OvationPrimeData, dt: datetime) -> [float, float, float]:
     value = data['value']
     mlat = data['mlat']
     mlt = data['mlt']
-    latitude = mlat_to_lat(mlat)
-    longitude = mlt_to_lon(mlt)
+    # latitude = mlat_to_lat(mlat)
+    # longitude = mlt_to_lon(mlt)
+    mlon = aacgmv2.convert_mlt(mlt, dt, True)
+    if mlon < 0:
+        mlon += 360
+    # mlon2 = (mlt * 24 + 180) % 360
+
+    # print(mlon, mlon2)
+
+    # test = smToLatLon([mlat], [mlon], dt)
+    test2 = mag_to_geo(mlat, mlon, dt)
+
+    # print(test, [longitude, latitude])
+    # longitude = test[1][0]
+    # latitude = test[0][0]
+
+    longitude = math.degrees(test2[1])
+    latitude = math.degrees(test2[0])
+    if latitude < 0:
+        latitude += 360
     return [longitude, latitude, value]
+
+
+def sort_coordinates(coords: list[tuple[float, float, float]]) -> list[tuple[float, float, float]]:
+    def comparator(a: [float, float, float], b: [float, float, float]) -> int:
+        for i in range(2):
+            if a[i] > b[i]:
+                return 1
+            if a[i] < b[i]:
+                return -1
+        return 0
+
+    return list(sorted(coords, key=cmp_to_key(comparator)))
 
 
 def grids_to_dicts(mlat_grid, mlt_grid, value_grid) -> List[OvationPrimeData]:
@@ -79,6 +231,63 @@ class OvationPrimeConductanceForm(Form):
     _type = ChoiceField(choices=[('pedgrid', 'pedgrid'), ('hallgrid', 'hallgrid')], required=True)
 
 
+def plot(new_mlat_grid, new_mlt_grid, vals, hemi, dt, view_name: str):
+    import matplotlib.pyplot as pp
+    from geospacepy import satplottools
+
+    f = pp.figure(figsize=(11, 5))
+    aH = f.add_subplot(111)
+    # aP = f.add_subplot(122)
+
+    X, Y = satplottools.latlt2cart(new_mlat_grid.flatten(), new_mlt_grid.flatten(), hemi)
+    X = X.reshape(new_mlat_grid.shape)
+    Y = Y.reshape(new_mlt_grid.shape)
+
+    satplottools.draw_dialplot(aH)
+    # satplottools.draw_dialplot(aP)
+
+    # mappableH = aH.pcolormesh(X, Y, new_hallgrid, vmin=0., vmax=20.)
+    # mappableP = aP.pcolormesh(X, Y, new_pedgrid, vmin=0., vmax=15.)
+
+    mappableH = aH.pcolormesh(X, Y, vals, vmin=0., vmax=20.)
+
+    aH.set_title("Hall Conductance")
+    # aP.set_title("Pedersen Conductance")
+
+    f.colorbar(mappableH, ax=aH)
+    # f.colorbar(mappableP, ax=aP)
+
+    f.suptitle("{2} {0} Hemisphere at {1}".format(hemi, dt.strftime('%c'), view_name),
+                fontweight='bold')
+    f.savefig('{2}_{1}_{0}.png'.format(dt.strftime('%Y%m%d_%H%M%S'), hemi, view_name))
+
+    # return f
+
+
+def fill_zeros(coordinates: list[dict]) -> list[dict]:
+    lats = [c['mlat'] for c in coordinates]
+    lons = [c['mlt'] for c in coordinates]
+
+    lats = list(sorted(set(lats)))
+    lons = list(sorted(set(lons)))
+
+    lat_diff = lats[1] - lats[0]
+
+    begin = lats[len(lats) // 2 - 1] + lat_diff
+    end = lats[len(lats) // 2]
+
+    for lat in np.arange(begin, end, lat_diff):
+        for lon in lons:
+            fix = {
+                'mlat': lat,
+                'mlt': lon,
+                'value': 0,
+
+            }
+            coordinates.append(fix)
+
+    return coordinates
+
 def get_ovation_prime_conductance_interpolated(request):
     """
     Отдаем json с данными для построения одного из графиков
@@ -89,7 +298,7 @@ def get_ovation_prime_conductance_interpolated(request):
     form = OvationPrimeConductanceForm(request.GET)
     is_valid = form.is_valid()
     if not is_valid:
-        return HttpResponseBadRequest(form.errors.get_json_data())
+        return HttpResponseBadRequest(form.errors.as_json())
 
     dt = form.cleaned_data['dt']
     _type = form.cleaned_data['_type']
@@ -102,13 +311,13 @@ def get_ovation_prime_conductance_interpolated(request):
 
     estimator = ovation_prime.ConductanceEstimator(fluxtypes=['diff', 'mono'])
 
-    north_mlatgrid, north_mltgrid, north_pedgrid, north_hallgrid = estimator.get_conductance(dt, hemi='N',
-                                                                                             auroral=True,
-                                                                                             solar=True)
+    north_mlatgrid, north_mltgrid, north_pedgrid, north_hallgrid, oi = estimator.get_conductance(dt, hemi='N',
+                                                                                                 auroral=True,
+                                                                                                 solar=True)
 
-    south_mlatgrid, south_mltgrid, south_pedgrid, south_hallgrid = estimator.get_conductance(dt, hemi='S',
-                                                                                             auroral=True,
-                                                                                             solar=True)
+    south_mlatgrid, south_mltgrid, south_pedgrid, south_hallgrid, oi = estimator.get_conductance(dt, hemi='S',
+                                                                                                 auroral=True,
+                                                                                                 solar=True)
 
     if _type == 'pedgrid':
         north_interpolator = ovation_prime.LatLocaltimeInterpolator(north_mlatgrid, north_mltgrid, north_pedgrid)
@@ -124,6 +333,9 @@ def get_ovation_prime_conductance_interpolated(request):
         south_interpolator = ovation_prime.LatLocaltimeInterpolator(south_mlatgrid, south_mltgrid, south_hallgrid)
         south_new_values = south_interpolator.interpolate(new_south_mlat_grid, new_south_mlt_grid)
 
+    plot(new_north_mlat_grid, new_north_mlt_grid, north_new_values, 'N', dt, "conductance_interpolated")
+    plot(new_south_mlat_grid, new_south_mlt_grid, south_new_values, 'S', dt, "conductance_interpolated")
+
     _data = [
         *grids_to_dicts(new_north_mlat_grid, new_north_mlt_grid, north_new_values),
         *grids_to_dicts(new_south_mlat_grid, new_south_mlt_grid, south_new_values),
@@ -132,17 +344,27 @@ def get_ovation_prime_conductance_interpolated(request):
     now = datetime.datetime.now()
     now_str = now.strftime('%Y_%m_%d_%H_%M_%S_%f')
 
-    parsed_data = [parse(val) for val in _data]
+    parsed_data = [parse(val, dt) for val in _data]
+    # parsed_data = sort_coordinates(parsed_data)
+
+    print(oi)
+    # parsed_data = [
+    #     [55, 56, 10],
+    #     [56, 56, 20],
+    #     [55, 55, 2],
+    #     [55, -55, 15],
+    #     [-55, 55, 0.5],
+    #     [-55, -55, -2],
+    # ]
 
     result = {
-        "Observation Time": now_str,
+        "Observation Time": [str(oi.startdt), str(oi.enddt)],
         "Forecast Time": str(dt),
         "Data Format": f"[Longitude, Latitude, {_type}]",
         "coordinates": parsed_data
     }
 
-
-    logger.debug('success calculated')
+    # logger.debug('success calculated')
     return JsonResponse(result, safe=False)
 
 
@@ -157,27 +379,30 @@ def get_ovation_prime_conductance(request):
     form = OvationPrimeConductanceForm(request.GET)
     is_valid = form.is_valid()
     if not is_valid:
-        return HttpResponseBadRequest(form.errors.get_json_data())
+        return HttpResponseBadRequest(form.errors.as_json())
 
     dt = form.cleaned_data['dt']
     _type = form.cleaned_data['_type']
 
     estimator = ovation_prime.ConductanceEstimator(fluxtypes=['diff', 'mono'])
 
-    north_mlatgrid, north_mltgrid, north_pedgrid, north_hallgrid = estimator.get_conductance(dt, hemi='N',
-                                                                                             auroral=True,
-                                                                                             solar=True)
+    north_mlatgrid, north_mltgrid, north_pedgrid, north_hallgrid, oi = estimator.get_conductance(dt, hemi='N',
+                                                                                                 auroral=True,
+                                                                                                 solar=True)
 
-    south_mlatgrid, south_mltgrid, south_pedgrid, south_hallgrid = estimator.get_conductance(dt, hemi='S',
-                                                                                             auroral=True,
-                                                                                             solar=True)
+    south_mlatgrid, south_mltgrid, south_pedgrid, south_hallgrid, oi = estimator.get_conductance(dt, hemi='S',
+                                                                                                 auroral=True,
+                                                                                                 solar=True)
 
     if _type == 'pedgrid':
         north_data = north_pedgrid
         south_data = south_pedgrid
     else:
         north_data = north_hallgrid
-        south_data = south_mlatgrid
+        south_data = south_hallgrid
+
+    plot(north_mlatgrid, north_mltgrid, north_data, 'N', dt, "conductance")
+    plot(south_mlatgrid, south_mltgrid, south_data, 'S', dt, "conductance")
 
     _data = [
         *grids_to_dicts(north_mlatgrid, north_mltgrid, north_data),
@@ -187,16 +412,18 @@ def get_ovation_prime_conductance(request):
     now = datetime.datetime.now()
     now_str = now.strftime('%Y_%m_%d_%H_%M_%S_%f')
 
-    parsed_data = [parse(val) for val in _data]
+    parsed_data = [parse(val, dt) for val in _data]
+
+    print(oi)
 
     result = {
-        "Observation Time": now_str,
+        "Observation Time": [str(oi.startdt), str(oi.enddt)],
         "Forecast Time": str(dt),
         "Data Format": f"[Longitude, Latitude, {_type}]",
         "coordinates": parsed_data
     }
 
-    logger.debug('success calculated')
+    # logger.debug('success calculated')
     return JsonResponse(result, safe=False)
 
 
@@ -229,8 +456,8 @@ def get_weighted_flux(request):
 
     estimator = ovation_prime.FluxEstimator(atype, jtype)
 
-    mlatgridN, mltgridN, fluxgridN = estimator.get_flux_for_time(dt, hemi='N')
-    mlatgridS, mltgridS, fluxgridS = estimator.get_flux_for_time(dt, hemi='S')
+    mlatgridN, mltgridN, fluxgridN, oi = estimator.get_flux_for_time(dt, hemi='N')
+    mlatgridS, mltgridS, fluxgridS, oi = estimator.get_flux_for_time(dt, hemi='S')
 
     _data = [
         *grids_to_dicts(mlatgridN, mltgridN, fluxgridN),
@@ -240,16 +467,20 @@ def get_weighted_flux(request):
     now = datetime.datetime.now()
     now_str = now.strftime('%Y_%m_%d_%H_%M_%S_%f')
 
-    parsed_data = [parse(val) for val in _data]
+    _data = fill_zeros(_data)
+
+    parsed_data = [parse(val, dt) for val in _data]
+
+    # parsed_data = fill_zeros(parsed_data)
 
     result = {
-        "Observation Time": now_str,
+        "Observation Time": [str(oi.startdt), str(oi.enddt)],
         "Forecast Time": str(dt),
         "Data Format": f"[Longitude, Latitude, weighted_flux]",
         "coordinates": parsed_data
     }
 
-    logger.debug('success calculated')
+    # logger.debug('success calculated')
     return JsonResponse(result, safe=False)
 
 
@@ -259,6 +490,7 @@ season_choices = [
     ('summer', 'summer'),
     ('fall', 'fall'),
 ]
+
 
 class SeasonalFluxForm(Form):
     dt = DateTimeField(required=True)
@@ -272,7 +504,6 @@ class SeasonalFluxForm(Form):
     dF = DecimalField(required=False, initial=2134.17)
 
 
-
 def get_seasonal_flux(request):
     """
     Отдаем json с данными для построения графиков из
@@ -283,6 +514,8 @@ def get_seasonal_flux(request):
             type of aurora for which to load regression coeffients
     :jtype: - str, ['energy','number']
             Type of flux you want to estimate
+    :seasonN: str ['winter', 'summer', 'spring', 'fall']
+    :seasonS: str ['winter', 'summer', 'spring', 'fall']
     """
     form = SeasonalFluxForm(request.GET)
     is_valid = form.is_valid()
@@ -315,7 +548,7 @@ def get_seasonal_flux(request):
     now = datetime.datetime.now()
     now_str = now.strftime('%Y_%m_%d_%H_%M_%S_%f')
 
-    parsed_data = [parse(val) for val in _data]
+    parsed_data = [parse(val, dt) for val in _data]
 
     result = {
         "Observation Time": now_str,
@@ -324,6 +557,5 @@ def get_seasonal_flux(request):
         "coordinates": parsed_data
     }
 
-    logger.debug('success calculated')
+    # logger.debug('success calculated')
     return JsonResponse(result, safe=False)
-
