@@ -364,7 +364,7 @@ def get_ovation_prime_conductance_interpolated(request):
         "coordinates": parsed_data
     }
 
-    logger.debug('success calculated')
+    # logger.debug('success calculated')
     return JsonResponse(result, safe=False)
 
 
@@ -423,7 +423,7 @@ def get_ovation_prime_conductance(request):
         "coordinates": parsed_data
     }
 
-    logger.debug('success calculated')
+    # logger.debug('success calculated')
     return JsonResponse(result, safe=False)
 
 
@@ -480,7 +480,7 @@ def get_weighted_flux(request):
         "coordinates": parsed_data
     }
 
-    logger.debug('success calculated')
+    # logger.debug('success calculated')
     return JsonResponse(result, safe=False)
 
 
@@ -557,5 +557,5 @@ def get_seasonal_flux(request):
         "coordinates": parsed_data
     }
 
-    logger.debug('success calculated')
+    # logger.debug('success calculated')
     return JsonResponse(result, safe=False)

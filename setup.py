@@ -38,13 +38,14 @@ class CleanCommand(Command):
 NASA_OMNI_READER_VERSION = '0.1.2'
 OVATION_PYME_VERSION = '0.1.4'
 
-
 setup(
     name='django-ovation-prime',
     version='0.2.0',
     install_requires=[
         'Django >= 3.2.0',
         'numpy >= 1.21.0',
+        'aacgmv2>=2.6.2',
+        'pyIGRF>=0.3.3',
         f'OvationPyme @ git+https://github.com/mishka251/OvationPyme.git@{OVATION_PYME_VERSION}#egg=ovationpyme',
         f'nasaomnireader @ git+https://github.com/mishka251/nasaomnireader.git@{NASA_OMNI_READER_VERSION}#egg=nasaomnireader'
     ],
