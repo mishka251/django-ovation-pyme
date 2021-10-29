@@ -35,12 +35,12 @@ class CleanCommand(Command):
                 shutil.rmtree(path)
 
 
-NASA_OMNI_READER_VERSION = '0.1.2'
-OVATION_PYME_VERSION = '0.1.4'
+NASA_OMNI_READER_VERSION = '0.1.3'
+OVATION_PYME_VERSION = '0.1.5'
 
 setup(
     name='django-ovation-prime',
-    version='0.2.0',
+    version='0.2.1',
     install_requires=[
         'Django >= 3.2.0',
         'numpy >= 1.21.0',
