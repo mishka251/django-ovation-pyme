@@ -2,14 +2,20 @@
 import datetime
 # import the logging library
 import logging
-import time
-from functools import cmp_to_key
-from typing import TypedDict, List
 
 # Get an instance of a logger
 import math
 import numpy as np
-from django.forms import Form, DateTimeField, ChoiceField, DecimalField
+
+from ovation_prime_app.forms import OvationPrimeConductanceForm, WeightedFluxForm, SeasonalFluxForm
+from ovation_prime_app.utils.fill_zeros import fill_zeros
+from ovation_prime_app.utils.grids_to_dicts import grids_to_dicts
+from ovation_prime_app.utils.mag_to_geo import mag_to_geo
+from ovation_prime_app.utils.round_coordinates import round_coordinates
+from ovation_prime_app.utils.sort_coordinates import sort_coordinates
+from ovation_prime_app.utils.test_plot import plot
+from ovation_prime_app.utils.dicts_to_tuples import parse
+from ovation_prime_app.utils.geo_to_mag import geo_2_mag_fixed
 
 logger = logging.getLogger(__name__)
 
@@ -20,12 +26,6 @@ from django.conf import settings
 import aacgmv2
 
 from ovationpyme import ovation_prime
-from pyIGRF.loadCoeffs import get_coeffs
-
-class OvationPrimeData(TypedDict):
-    value: float
-    mlt: float
-    mlat: float
 
 
 def get_north_mlat_grid():
@@ -44,6 +44,56 @@ def get_south_mlt_grid():
     return settings.SOUTH_MLT_GRID
 
 
+def create_mag_grids(dt: datetime.datetime, geo_lons: list[float], geo_lats: list[float]):
+    geo_lats_table = np.meshgrid(geo_lats, geo_lons)
+    mag_lats, mlts = np.meshgrid(geo_lats, geo_lons)
+    n, m = geo_lats_table[0].shape
+    for i in range(n):
+        for j in range(m):
+            geo_lat = geo_lats[j]
+            geo_lon = geo_lons[i]
+
+            geo_lat_rads = math.radians(geo_lat)
+            geo_lon_rads = math.radians(geo_lon)
+
+            alt = 0
+
+            latMAG_degrees, longMAG_degrees = geo_2_mag_fixed(geo_lat_rads, geo_lon_rads, alt, dt)
+
+            mlt = aacgmv2.convert_mlt(longMAG_degrees, dt, False)[0]
+
+            mag_lats[i][j] = latMAG_degrees
+            mlts[i][j] = mlt
+
+            back_mlt = mlts[i][j]
+            back_mlat = mag_lats[i][j]
+
+            back_mlon_degrees = aacgmv2.convert_mlt(back_mlt, dt, True)
+            back_lat_geo_rads, back_long_geo_rads, back_h = mag_to_geo(back_mlat, back_mlon_degrees, dt)
+
+            back_lat_geo_rads = back_lat_geo_rads
+            back_long_geo_rads = back_long_geo_rads
+
+            assert abs(back_mlon_degrees-longMAG_degrees) < 1e-4 or abs(back_mlon_degrees-longMAG_degrees-360) < 1e-4 or abs(back_mlon_degrees-longMAG_degrees+360) < 1e-4, f'{back_mlon_degrees=}, {longMAG_degrees=}, {mlt=}, {i=}, {j=}'
+
+            assert abs(back_lat_geo_rads-geo_lat_rads) < 1e-4, f'{back_lat_geo_rads=}, {geo_lat_rads=}, {back_long_geo_rads=}, {geo_lon_rads=} {i=}, {j=}, {longMAG_degrees=}, {back_mlon_degrees=}, {mlt=}'
+            assert abs(back_long_geo_rads - geo_lon_rads) < 1e-4 or abs(back_long_geo_rads - geo_lon_rads+ 2*math.pi) < 1e-4 or abs(back_long_geo_rads - geo_lon_rads - 2*math.pi) < 1e-4, f'{geo_lat=}, {geo_lon=}, {back_lat_geo_rads=}, {geo_lat_rads=}, {back_long_geo_rads=}, {geo_lon_rads=}, {i=}, {j=}, {longMAG_degrees=}, {latMAG_degrees=},{back_mlon_degrees=}, {mlt=}'
+
+    return mag_lats, mlts
+
+def create_north_grids(dt: datetime.datetime):
+    lons = settings.LONGITUDES
+    lats = settings.N_LATITUDES
+
+    return create_mag_grids(dt, lons, lats)
+
+def create_south_grids(dt: datetime.datetime):
+    lons = settings.LONGITUDES
+    lats = settings.S_LATITUDES
+
+    return create_mag_grids(dt, lons, lats)
+
+
 # def mlt_to_lon(mlt: float) -> float:
 #     return mlt * 15 - 180
 #
@@ -51,242 +101,7 @@ def get_south_mlt_grid():
 # def mlat_to_lat(mlat: float) -> float:
 #     return mlat
 
-def date_to_year(date: datetime.datetime) -> float:
-    def sinceEpoch(date): # returns seconds since epoch
-        return time.mktime(date.timetuple())
-    s = sinceEpoch
 
-    year = date.year
-    startOfThisYear = datetime.datetime(year=year, month=1, day=1)
-    startOfNextYear = datetime.datetime(year=year+1, month=1, day=1)
-
-    yearElapsed = s(date) - s(startOfThisYear)
-    yearDuration = s(startOfNextYear) - s(startOfThisYear)
-    fraction = yearElapsed/yearDuration
-
-    return date.year + fraction
-
-
-def mag_to_geo(latMAG: float, longMAG: float, dt: datetime.datetime) -> tuple[float, float, float]:
-    mag1_sgn = 1
-    if longMAG > 180:
-        longMAG = 360 - longMAG
-        mag1_sgn = -1
-
-    MAG = [0, 0, 0]
-
-    cos = math.cos(math.radians(longMAG))
-    tan = math.tan(math.radians(latMAG))
-
-    cos2 = cos * cos
-    tan2 = tan * tan
-
-    MAG[0] = cos2 * (1 - tan2 / (1 + tan2))
-    MAG[1] = MAG[0] * (1 / cos2 - 1)
-    MAG[2] = tan2 / (1 + tan2)
-
-    MAG[0] = math.sqrt(MAG[0])
-    MAG[1] = math.sqrt(MAG[1])
-    MAG[2] = math.sqrt(MAG[2])
-    if mag1_sgn == -1:
-        MAG[1] *= -1
-    if tan < 0:
-        MAG[2] *= -1
-    if cos < 0:
-        MAG[0] *= -1
-
-    _h11 = 4797.1  #
-    _g11 = -1501  # Сферические гармонические коэффициенты для эпохи 2015-2020
-    _g10 = -29442  #
-
-    g, h = get_coeffs(date_to_year(dt))
-
-    h11 = h[1][1]
-    g11 = g[1][1]
-    g10 = g[1][0]
-
-    # print(g10,_g10)
-    # print(g11, _g11)
-    # print(h11, _h11)
-
-    lamda = math.atan(h11 / g11)  # угол поворотота вокруг оси Y
-    fi = - math.asin((g11 * math.cos(lamda) + h11 * math.sin(lamda)) / (g10))
-
-    t5Y = [
-        [math.cos(fi), 0, math.sin(fi)],
-        [0, 1, 0],
-        [-math.sin(fi), 0, math.cos(fi)]
-    ]
-
-    # print(t5Y)
-
-    t5Z = [
-        [math.cos(lamda), math.sin(lamda), 0],
-        [-math.sin(lamda), math.cos(lamda), 0],
-        [0, 0, 1]
-    ]
-
-    # print(t5Z)
-
-    t5 = np.dot(t5Y, t5Z)
-    t5_inv = np.linalg.inv(t5)
-    GEO = np.dot(t5_inv, MAG)
-
-    rE = math.sqrt(GEO[0] * GEO[0] + GEO[1] * GEO[1] + GEO[2] * GEO[2])
-
-    x = GEO[0] / rE  # math.cos(latGEO) * math.cos(longGEO)
-    y = GEO[1] / rE  # math.cos(latGEO) * math.sin(longGEO)
-    z = GEO[2] / rE  # math.sin(latGEO)
-
-    _latGEO1 = math.asin(z)
-    if _latGEO1 > 0:
-        _latGEO2 = math.pi - _latGEO1
-    else:
-        _latGEO2 = -math.pi - _latGEO1
-
-    cos_lat1 = math.cos(_latGEO1)
-    cos_lat2 = math.cos(_latGEO2)
-
-    long_sin1 = y / cos_lat1
-    if long_sin1 > 1:
-        long_sin1 = 1
-    if long_sin1 < -1:
-        long_sin1 = -1
-    long_sin2 = y / cos_lat2
-    if long_sin2 > 1:
-        long_sin2 = 1
-    if long_sin2 < -1:
-        long_sin2 = -1
-
-    _longGEO1 = math.asin(long_sin1)
-    _longGEO3 = math.asin(long_sin2)
-
-    _x1 = math.cos(_latGEO1) * math.cos(_longGEO1)
-    _x3 = math.cos(_latGEO2) * math.cos(_longGEO3)
-    eps = 1e-6
-    if abs(x - _x1) < eps:
-        return _latGEO1, _longGEO1, 0
-    elif abs(x - _x3) < eps:
-        return _latGEO2, _longGEO3, 0
-    else:
-        raise ValueError()
-
-
-def parse(data: OvationPrimeData, dt: datetime) -> [float, float, float]:
-    value = data['value']
-    mlat = data['mlat']
-    mlt = data['mlt']
-    # latitude = mlat_to_lat(mlat)
-    # longitude = mlt_to_lon(mlt)
-    mlon = aacgmv2.convert_mlt(mlt, dt, True)
-    if mlon < 0:
-        mlon += 360
-    # mlon2 = (mlt * 24 + 180) % 360
-
-    # print(mlon, mlon2)
-
-    # test = smToLatLon([mlat], [mlon], dt)
-    test2 = mag_to_geo(mlat, mlon, dt)
-
-    # print(test, [longitude, latitude])
-    # longitude = test[1][0]
-    # latitude = test[0][0]
-
-    longitude = math.degrees(test2[1])
-    latitude = math.degrees(test2[0])
-    if latitude < 0:
-        latitude += 360
-    return [longitude, latitude, value]
-
-
-def sort_coordinates(coords: list[tuple[float, float, float]]) -> list[tuple[float, float, float]]:
-    def comparator(a: [float, float, float], b: [float, float, float]) -> int:
-        for i in range(2):
-            if a[i] > b[i]:
-                return 1
-            if a[i] < b[i]:
-                return -1
-        return 0
-
-    return list(sorted(coords, key=cmp_to_key(comparator)))
-
-
-def grids_to_dicts(mlat_grid, mlt_grid, value_grid) -> List[OvationPrimeData]:
-    (n, m) = mlat_grid.shape
-
-    result = []
-    for i in range(n):
-        for j in range(m):
-            item = {
-                'mlat': mlat_grid[i, j],
-                'mlt': mlt_grid[i, j],
-                'value': value_grid[i, j],
-            }
-            result.append(item)
-    return result
-
-
-class OvationPrimeConductanceForm(Form):
-    dt = DateTimeField(required=True)
-    _type = ChoiceField(choices=[('pedgrid', 'pedgrid'), ('hallgrid', 'hallgrid')], required=True)
-
-
-def plot(new_mlat_grid, new_mlt_grid, vals, hemi, dt, view_name: str):
-    import matplotlib.pyplot as pp
-    from geospacepy import satplottools
-
-    f = pp.figure(figsize=(11, 5))
-    aH = f.add_subplot(111)
-    # aP = f.add_subplot(122)
-
-    X, Y = satplottools.latlt2cart(new_mlat_grid.flatten(), new_mlt_grid.flatten(), hemi)
-    X = X.reshape(new_mlat_grid.shape)
-    Y = Y.reshape(new_mlt_grid.shape)
-
-    satplottools.draw_dialplot(aH)
-    # satplottools.draw_dialplot(aP)
-
-    # mappableH = aH.pcolormesh(X, Y, new_hallgrid, vmin=0., vmax=20.)
-    # mappableP = aP.pcolormesh(X, Y, new_pedgrid, vmin=0., vmax=15.)
-
-    mappableH = aH.pcolormesh(X, Y, vals, vmin=0., vmax=20.)
-
-    aH.set_title("Hall Conductance")
-    # aP.set_title("Pedersen Conductance")
-
-    f.colorbar(mappableH, ax=aH)
-    # f.colorbar(mappableP, ax=aP)
-
-    f.suptitle("{2} {0} Hemisphere at {1}".format(hemi, dt.strftime('%c'), view_name),
-                fontweight='bold')
-    f.savefig('{2}_{1}_{0}.png'.format(dt.strftime('%Y%m%d_%H%M%S'), hemi, view_name))
-
-    # return f
-
-
-def fill_zeros(coordinates: list[dict]) -> list[dict]:
-    lats = [c['mlat'] for c in coordinates]
-    lons = [c['mlt'] for c in coordinates]
-
-    lats = list(sorted(set(lats)))
-    lons = list(sorted(set(lons)))
-
-    lat_diff = lats[1] - lats[0]
-
-    begin = lats[len(lats) // 2 - 1] + lat_diff
-    end = lats[len(lats) // 2]
-
-    for lat in np.arange(begin, end, lat_diff):
-        for lon in lons:
-            fix = {
-                'mlat': lat,
-                'mlt': lon,
-                'value': 0,
-
-            }
-            coordinates.append(fix)
-
-    return coordinates
 
 def get_ovation_prime_conductance_interpolated(request):
     """
@@ -303,11 +118,14 @@ def get_ovation_prime_conductance_interpolated(request):
     dt = form.cleaned_data['dt']
     _type = form.cleaned_data['_type']
 
-    new_north_mlat_grid = get_north_mlat_grid()
-    new_north_mlt_grid = get_north_mlt_grid()
+    new_north_mlat_grid, new_north_mlt_grid = create_north_grids(dt)
+    new_south_mlat_grid, new_south_mlt_grid = create_south_grids(dt)
 
-    new_south_mlat_grid = get_south_mlat_grid()
-    new_south_mlt_grid = get_south_mlt_grid()
+    # new_north_mlat_grid = get_north_mlat_grid()
+    # new_north_mlt_grid = get_north_mlt_grid()
+
+    # new_south_mlat_grid = get_south_mlat_grid()
+    # new_south_mlt_grid = get_south_mlt_grid()
 
     estimator = ovation_prime.ConductanceEstimator(fluxtypes=['diff', 'mono'])
 
@@ -345,7 +163,8 @@ def get_ovation_prime_conductance_interpolated(request):
     now_str = now.strftime('%Y_%m_%d_%H_%M_%S_%f')
 
     parsed_data = [parse(val, dt) for val in _data]
-    # parsed_data = sort_coordinates(parsed_data)
+    parsed_data = round_coordinates(parsed_data)
+    parsed_data = sort_coordinates(parsed_data)
 
     print(oi)
     # parsed_data = [
@@ -427,13 +246,6 @@ def get_ovation_prime_conductance(request):
     return JsonResponse(result, safe=False)
 
 
-class WeightedFluxForm(Form):
-    dt = DateTimeField(required=True)
-    atype = ChoiceField(choices=[('diff', 'diff'), ('mono', 'mono'), ('wave', 'wave'), ('ions', 'ions')],
-                        initial='diff', required=False)
-    jtype = ChoiceField(choices=[('energy', 'energy'), ('number', 'number')], initial='energy', required=False)
-
-
 def get_weighted_flux(request):
     """
     Отдаем json с данными для построения графиков из
@@ -482,26 +294,6 @@ def get_weighted_flux(request):
 
     # logger.debug('success calculated')
     return JsonResponse(result, safe=False)
-
-
-season_choices = [
-    ('winter', 'winter'),
-    ('spring', 'spring'),
-    ('summer', 'summer'),
-    ('fall', 'fall'),
-]
-
-
-class SeasonalFluxForm(Form):
-    dt = DateTimeField(required=True)
-    atype = ChoiceField(choices=[('diff', 'diff'), ('mono', 'mono'), ('wave', 'wave'), ('ions', 'ions')],
-                        initial='diff', required=False)
-    jtype = ChoiceField(choices=[('energy', 'energy'), ('number', 'number')], initial='energy', required=False)
-
-    seasonN = ChoiceField(choices=season_choices, initial='summer', required=False)
-    seasonS = ChoiceField(choices=season_choices, initial='winter', required=False)
-
-    dF = DecimalField(required=False, initial=2134.17)
 
 
 def get_seasonal_flux(request):
