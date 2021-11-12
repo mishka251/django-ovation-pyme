@@ -4,7 +4,7 @@ from ovation_prime_app.my_types import CoordinatesValue
 def round_coordinates_tuple(coords: CoordinatesValue) -> CoordinatesValue:
     lat, lon, val = coords
     lat = round(lat, 1)
-    lon = round(lon, 1)
+    lon = round(lon, 0)
     return CoordinatesValue(lat, lon, val)
 
 

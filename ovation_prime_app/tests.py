@@ -44,6 +44,15 @@ class TestCoordinatesConversion(TestCase):
         self.assertCoordinatesEqual(back_geo_lat_radians, geo_lat_rads, self.eps)
         self.assertCoordinatesEqual(back_geo_lon_radians, geo_lon_rads, self.eps)
 
+        back_geo_lat_degrees = math.degrees(back_geo_lat_radians)
+        back_geo_lon_degrees = math.degrees(back_geo_lon_radians)
+
+        self.assertLessEqual(back_geo_lat_degrees, 90)
+        self.assertGreaterEqual(back_geo_lat_degrees, -90)
+
+        self.assertLessEqual(back_geo_lon_degrees, 180)
+        self.assertGreaterEqual(back_geo_lon_degrees, -180)
+
     def assertCoordinatesEqual(self, a, b, eps):
         a = self.normalizeCoord(a)
         b = self.normalizeCoord(b)

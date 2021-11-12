@@ -33,6 +33,6 @@ def parse(data: 'OvationPrimeData', dt: datetime) -> 'CoordinatesValue':
 
     longitude = math.degrees(test2[1])
     latitude = math.degrees(test2[0])
-    if latitude < 0:
-        latitude += 360
+    # if latitude < 0:
+    #     latitude += 360
     return CoordinatesValue(longitude, latitude, value)
