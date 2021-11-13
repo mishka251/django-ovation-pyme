@@ -44,7 +44,7 @@ def get_south_mlt_grid():
     return settings.SOUTH_MLT_GRID
 
 
-def create_mag_grids(dt: datetime.datetime, geo_lons: list[float], geo_lats: list[float]):
+def create_mag_grids(dt: datetime.datetime, geo_lons: 'list[float]', geo_lats: 'list[float]'):
     geo_lats_table = np.meshgrid(geo_lats, geo_lons)
     mag_lats, mlts = np.meshgrid(geo_lats, geo_lons)
     n, m = geo_lats_table[0].shape
