@@ -40,7 +40,7 @@ OVATION_PYME_VERSION = '0.1.5'
 
 setup(
     name='django-ovation-prime',
-    version='0.2.1',
+    version='0.2.2',
     install_requires=[
         'Django >= 3.2.0',
         'numpy >= 1.21.0',
