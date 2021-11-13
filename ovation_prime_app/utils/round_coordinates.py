@@ -8,5 +8,5 @@ def round_coordinates_tuple(coords: CoordinatesValue) -> CoordinatesValue:
     return CoordinatesValue(lat, lon, val)
 
 
-def round_coordinates(coordinates: list[CoordinatesValue]) -> list[CoordinatesValue]:
+def round_coordinates(coordinates:' list[CoordinatesValue]') -> 'list[CoordinatesValue]':
     return list(map(round_coordinates_tuple, coordinates))
