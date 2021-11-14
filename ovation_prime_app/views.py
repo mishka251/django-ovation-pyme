@@ -322,6 +322,67 @@ def get_weighted_flux(request):
     # logger.debug('success calculated')
     return JsonResponse(result, safe=False)
 
+def get_weighted_flux_interpolated(request):
+    """
+    Отдаем json с данными для построения графиков из
+    draw_weighted_flux
+    Параметры запроса
+    :dt: - датавремя в формате `yyyy-mm-ddTHH:MM:SS`
+    :atype: - str, ['diff','mono','wave','ions']
+            type of aurora for which to load regression coeffients
+    :jtype: - str, ['energy','number']
+            Type of flux you want to estimate
+    """
+    form = WeightedFluxForm(request.GET)
+    is_valid = form.is_valid()
+    if not is_valid:
+        return HttpResponseBadRequest(form.errors.as_json())
+
+    dt = form.cleaned_data['dt']
+    atype = form.cleaned_data['atype'] or form.fields['atype'].initial
+    jtype = form.cleaned_data['jtype'] or form.fields['jtype'].initial
+
+    estimator = ovation_prime.FluxEstimator(atype, jtype)
+
+    new_north_mlat_grid, new_north_mlt_grid = create_north_grids(dt)
+    new_south_mlat_grid, new_south_mlt_grid = create_south_grids(dt)
+
+    mlatgridN, mltgridN, fluxgridN, oi = estimator.get_flux_for_time(dt, hemi='N')
+    mlatgridS, mltgridS, fluxgridS, oi = estimator.get_flux_for_time(dt, hemi='S')
+
+    north_interpolator = ovation_prime.LatLocaltimeInterpolator(mlatgridN, mltgridN, fluxgridN)
+    north_new_values = north_interpolator.interpolate(new_north_mlat_grid, new_north_mlt_grid)
+
+    south_interpolator = ovation_prime.LatLocaltimeInterpolator(mlatgridS, mltgridS, fluxgridS)
+    south_new_values = south_interpolator.interpolate(new_south_mlat_grid, new_south_mlt_grid)
+
+    _data = [
+        *grids_to_dicts(new_north_mlat_grid, new_north_mlt_grid, north_new_values),
+        *grids_to_dicts(new_south_mlat_grid, new_south_mlt_grid, south_new_values),
+    ]
+
+    now = datetime.datetime.now()
+    now_str = now.strftime('%Y_%m_%d_%H_%M_%S_%f')
+
+    _data = fill_zeros(_data)
+
+    parsed_data = [parse(val, dt) for val in _data]
+    parsed_data_rounded = round_coordinates(parsed_data)
+    parsed_data_rounded = check_duplicates(parsed_data_rounded)
+    parsed_data_sorted = sort_coordinates(parsed_data_rounded)
+
+    # parsed_data = fill_zeros(parsed_data)
+
+    result = {
+        "Observation Time": [str(oi.startdt), str(oi.enddt)],
+        "Forecast Time": str(dt),
+        "Data Format": f"[Longitude, Latitude, weighted_flux]",
+        "coordinates": parsed_data_sorted
+    }
+
+    # logger.debug('success calculated')
+    return JsonResponse(result, safe=False)
+
 
 def get_seasonal_flux(request):
     """
