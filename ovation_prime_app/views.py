@@ -8,6 +8,7 @@ import math
 import numpy as np
 
 from ovation_prime_app.forms import OvationPrimeConductanceForm, WeightedFluxForm, SeasonalFluxForm
+from ovation_prime_app.my_types import CoordinatesValue
 from ovation_prime_app.utils.fill_zeros import fill_zeros
 from ovation_prime_app.utils.grids_to_dicts import grids_to_dicts
 from ovation_prime_app.utils.mag_to_geo import mag_to_geo
@@ -101,6 +102,28 @@ def create_south_grids(dt: datetime.datetime):
 # def mlat_to_lat(mlat: float) -> float:
 #     return mlat
 
+def check_duplicates(data: 'list[CoordinatesValue]') -> 'list[CoordinatesValue]':
+    used_coordinates = set()
+    used_180_values = {}
+    result = []
+
+    for coord in data:
+        corrds = (coord.longitude, coord.latitude)
+        if corrds in used_coordinates:
+            logger.warning(f'duplicate {corrds}')
+            continue
+        used_coordinates.add(corrds)
+        if abs(coord.latitude) == 180:
+            used_180_values[coord.longitude] = coord.value
+            continue
+        result.append(coord)
+
+    for longitude, value in used_180_values.items():
+        result.append(CoordinatesValue(180, longitude, value))
+        result.append(CoordinatesValue(-180, longitude, value))
+
+    return result
+
 
 
 def get_ovation_prime_conductance_interpolated(request):
@@ -163,8 +186,12 @@ def get_ovation_prime_conductance_interpolated(request):
     now_str = now.strftime('%Y_%m_%d_%H_%M_%S_%f')
 
     parsed_data = [parse(val, dt) for val in _data]
-    parsed_data = round_coordinates(parsed_data)
-    parsed_data = sort_coordinates(parsed_data)
+    # for i in range(90):
+    #     parsed_data[i] = CoordinatesValue( -180, parsed_data[i].longitude, parsed_data[i].value)
+    #     parsed_data[13013+i] = CoordinatesValue(180, parsed_data[i+13013].longitude, parsed_data[i+13013].value)
+    parsed_data_rounded = round_coordinates(parsed_data)
+    parsed_data_rounded = check_duplicates(parsed_data_rounded)
+    parsed_data_sorted = sort_coordinates(parsed_data_rounded)
 
     print(oi)
     # parsed_data = [
@@ -180,7 +207,7 @@ def get_ovation_prime_conductance_interpolated(request):
         "Observation Time": [str(oi.startdt), str(oi.enddt)],
         "Forecast Time": str(dt),
         "Data Format": f"[Longitude, Latitude, {_type}]",
-        "coordinates": parsed_data
+        "coordinates": parsed_data_sorted
     }
 
     # logger.debug('success calculated')
