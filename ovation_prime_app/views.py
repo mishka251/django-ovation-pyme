@@ -1,10 +1,13 @@
 # 2021.08.26 22:04
+import cProfile
 import datetime
 # import the logging library
 import logging
 
 # Get an instance of a logger
 import math
+import os
+
 import numpy as np
 
 from ovation_prime_app.forms import OvationPrimeConductanceForm, WeightedFluxForm, SeasonalFluxForm
@@ -14,7 +17,7 @@ from ovation_prime_app.utils.grids_to_dicts import grids_to_dicts
 from ovation_prime_app.utils.mag_to_geo import mag_to_geo
 from ovation_prime_app.utils.round_coordinates import round_coordinates
 from ovation_prime_app.utils.sort_coordinates import sort_coordinates
-from ovation_prime_app.utils.test_plot import plot
+# from ovation_prime_app.utils.test_plot import plot
 from ovation_prime_app.utils.dicts_to_tuples import parse
 from ovation_prime_app.utils.geo_to_mag import geo_2_mag_fixed
 
@@ -45,6 +48,38 @@ def get_south_mlt_grid():
     return settings.SOUTH_MLT_GRID
 
 
+class LogWithCprofile:
+    filename: str = None
+
+    def __init__(self, filename: str = None):
+        self.filename = filename
+
+    def __call__(self, fun):
+        self.__name__ = fun.__name__
+
+        def outer(*args, **kwargs):
+            directory = 'profiling'
+            if not os.path.exists(directory):
+                os.mkdir(directory)
+
+            pr = cProfile.Profile()
+            pr.enable()
+            result = fun(*args, **kwargs)
+            pr.disable()
+            name = self.filename or fun.__name__
+            now = datetime.datetime.now()
+            now_str = now.strftime('%Y_%m_%d_%H_%M_%S_%f')
+            filenaame = f'{name}__{now_str}.pstat'
+            pr.dump_stats(os.path.join(directory, filenaame))
+            return result
+
+        fun_data = fun.__dict__
+        for key, value in fun_data.items():
+            setattr(outer, key, value)
+
+        return outer if settings.DEBUG else fun
+
+
 def create_mag_grids(dt: datetime.datetime, geo_lons: 'list[float]', geo_lats: 'list[float]'):
     geo_lats_table = np.meshgrid(geo_lats, geo_lons)
     mag_lats, mlts = np.meshgrid(geo_lats, geo_lons)
@@ -66,27 +101,34 @@ def create_mag_grids(dt: datetime.datetime, geo_lons: 'list[float]', geo_lats: '
             mag_lats[i][j] = latMAG_degrees
             mlts[i][j] = mlt
 
-            back_mlt = mlts[i][j]
-            back_mlat = mag_lats[i][j]
+            # back_mlt = mlts[i][j]
+            # back_mlat = mag_lats[i][j]
 
-            back_mlon_degrees = aacgmv2.convert_mlt(back_mlt, dt, True)
-            back_lat_geo_rads, back_long_geo_rads, back_h = mag_to_geo(back_mlat, back_mlon_degrees, dt)
+            # back_mlon_degrees = aacgmv2.convert_mlt(back_mlt, dt, True)
+            # back_lat_geo_rads, back_long_geo_rads, back_h = mag_to_geo(back_mlat, back_mlon_degrees, dt)
 
-            back_lat_geo_rads = back_lat_geo_rads
-            back_long_geo_rads = back_long_geo_rads
+            # back_lat_geo_rads = back_lat_geo_rads
+            # back_long_geo_rads = back_long_geo_rads
 
-            assert abs(back_mlon_degrees-longMAG_degrees) < 1e-4 or abs(back_mlon_degrees-longMAG_degrees-360) < 1e-4 or abs(back_mlon_degrees-longMAG_degrees+360) < 1e-4, f'{back_mlon_degrees=}, {longMAG_degrees=}, {mlt=}, {i=}, {j=}'
-
-            assert abs(back_lat_geo_rads-geo_lat_rads) < 1e-4, f'{back_lat_geo_rads=}, {geo_lat_rads=}, {back_long_geo_rads=}, {geo_lon_rads=} {i=}, {j=}, {longMAG_degrees=}, {back_mlon_degrees=}, {mlt=}'
-            assert abs(back_long_geo_rads - geo_lon_rads) < 1e-4 or abs(back_long_geo_rads - geo_lon_rads+ 2*math.pi) < 1e-4 or abs(back_long_geo_rads - geo_lon_rads - 2*math.pi) < 1e-4, f'{geo_lat=}, {geo_lon=}, {back_lat_geo_rads=}, {geo_lat_rads=}, {back_long_geo_rads=}, {geo_lon_rads=}, {i=}, {j=}, {longMAG_degrees=}, {latMAG_degrees=},{back_mlon_degrees=}, {mlt=}'
+            # assert abs(back_mlon_degrees - longMAG_degrees) < 1e-4 or abs(
+            #     back_mlon_degrees - longMAG_degrees - 360) < 1e-4 or abs(
+            #     back_mlon_degrees - longMAG_degrees + 360) < 1e-4, f'{back_mlon_degrees=}, {longMAG_degrees=}, {mlt=}, {i=}, {j=}'
+            #
+            # assert abs(
+            #     back_lat_geo_rads - geo_lat_rads) < 1e-4, f'{back_lat_geo_rads=}, {geo_lat_rads=}, {back_long_geo_rads=}, {geo_lon_rads=} {i=}, {j=}, {longMAG_degrees=}, {back_mlon_degrees=}, {mlt=}'
+            # assert abs(back_long_geo_rads - geo_lon_rads) < 1e-4 or abs(
+            #     back_long_geo_rads - geo_lon_rads + 2 * math.pi) < 1e-4 or abs(
+            #     back_long_geo_rads - geo_lon_rads - 2 * math.pi) < 1e-4, f'{geo_lat=}, {geo_lon=}, {back_lat_geo_rads=}, {geo_lat_rads=}, {back_long_geo_rads=}, {geo_lon_rads=}, {i=}, {j=}, {longMAG_degrees=}, {latMAG_degrees=},{back_mlon_degrees=}, {mlt=}'
 
     return mag_lats, mlts
+
 
 def create_north_grids(dt: datetime.datetime):
     lons = settings.LONGITUDES
     lats = settings.N_LATITUDES
 
     return create_mag_grids(dt, lons, lats)
+
 
 def create_south_grids(dt: datetime.datetime):
     lons = settings.LONGITUDES
@@ -105,6 +147,7 @@ def create_south_grids(dt: datetime.datetime):
 def check_duplicates(data: 'list[CoordinatesValue]') -> 'list[CoordinatesValue]':
     used_coordinates = set()
     used_180_values = {}
+    used_0_values = {}
     result = []
 
     for coord in data:
@@ -116,16 +159,21 @@ def check_duplicates(data: 'list[CoordinatesValue]') -> 'list[CoordinatesValue]'
         if abs(coord.latitude) == 180:
             used_180_values[coord.longitude] = coord.value
             continue
+        if abs(coord.latitude) ==0 or abs(coord.latitude) == 360:
+            used_0_values[coord.longitude] = coord.value
+            continue
         result.append(coord)
 
     for longitude, value in used_180_values.items():
         result.append(CoordinatesValue(180, longitude, value))
-        result.append(CoordinatesValue(-180, longitude, value))
+    for longitude, value in used_0_values.items():
+        result.append(CoordinatesValue(0, longitude, value))
+        # result.append(CoordinatesValue(-180, longitude, value))
 
     return result
 
 
-
+# @LogWithCprofile('conductance_interpolated')
 def get_ovation_prime_conductance_interpolated(request):
     """
     Отдаем json с данными для построения одного из графиков
@@ -174,8 +222,8 @@ def get_ovation_prime_conductance_interpolated(request):
         south_interpolator = ovation_prime.LatLocaltimeInterpolator(south_mlatgrid, south_mltgrid, south_hallgrid)
         south_new_values = south_interpolator.interpolate(new_south_mlat_grid, new_south_mlt_grid)
 
-    plot(new_north_mlat_grid, new_north_mlt_grid, north_new_values, 'N', dt, "conductance_interpolated")
-    plot(new_south_mlat_grid, new_south_mlt_grid, south_new_values, 'S', dt, "conductance_interpolated")
+    # plot(new_north_mlat_grid, new_north_mlt_grid, north_new_values, 'N', dt, "conductance_interpolated")
+    # plot(new_south_mlat_grid, new_south_mlt_grid, south_new_values, 'S', dt, "conductance_interpolated")
 
     _data = [
         *grids_to_dicts(new_north_mlat_grid, new_north_mlt_grid, north_new_values),
@@ -186,34 +234,24 @@ def get_ovation_prime_conductance_interpolated(request):
     now_str = now.strftime('%Y_%m_%d_%H_%M_%S_%f')
 
     parsed_data = [parse(val, dt) for val in _data]
-    # for i in range(90):
-    #     parsed_data[i] = CoordinatesValue( -180, parsed_data[i].longitude, parsed_data[i].value)
-    #     parsed_data[13013+i] = CoordinatesValue(180, parsed_data[i+13013].longitude, parsed_data[i+13013].value)
+
     parsed_data_rounded = round_coordinates(parsed_data)
     parsed_data_rounded = check_duplicates(parsed_data_rounded)
     parsed_data_sorted = sort_coordinates(parsed_data_rounded)
-
-    print(oi)
-    # parsed_data = [
-    #     [55, 56, 10],
-    #     [56, 56, 20],
-    #     [55, 55, 2],
-    #     [55, -55, 15],
-    #     [-55, 55, 0.5],
-    #     [-55, -55, -2],
-    # ]
 
     result = {
         "Observation Time": [str(oi.startdt), str(oi.enddt)],
         "Forecast Time": str(dt),
         "Data Format": f"[Longitude, Latitude, {_type}]",
-        "coordinates": parsed_data_sorted
+        "coordinates": parsed_data_sorted,
+        "type": "MultiPoint",
     }
 
     # logger.debug('success calculated')
     return JsonResponse(result, safe=False)
 
 
+# @LogWithCprofile('prime_conductance')
 def get_ovation_prime_conductance(request):
     """
     Отдаем json с данными для построения одного из графиков
@@ -247,8 +285,8 @@ def get_ovation_prime_conductance(request):
         north_data = north_hallgrid
         south_data = south_hallgrid
 
-    plot(north_mlatgrid, north_mltgrid, north_data, 'N', dt, "conductance")
-    plot(south_mlatgrid, south_mltgrid, south_data, 'S', dt, "conductance")
+    # plot(north_mlatgrid, north_mltgrid, north_data, 'N', dt, "conductance")
+    # plot(south_mlatgrid, south_mltgrid, south_data, 'S', dt, "conductance")
 
     _data = [
         *grids_to_dicts(north_mlatgrid, north_mltgrid, north_data),
@@ -266,13 +304,15 @@ def get_ovation_prime_conductance(request):
         "Observation Time": [str(oi.startdt), str(oi.enddt)],
         "Forecast Time": str(dt),
         "Data Format": f"[Longitude, Latitude, {_type}]",
-        "coordinates": parsed_data
+        "coordinates": parsed_data,
+        "type": "MultiPoint",
     }
 
     # logger.debug('success calculated')
     return JsonResponse(result, safe=False)
 
 
+# @LogWithCprofile('weighted_flux')
 def get_weighted_flux(request):
     """
     Отдаем json с данными для построения графиков из
@@ -316,12 +356,15 @@ def get_weighted_flux(request):
         "Observation Time": [str(oi.startdt), str(oi.enddt)],
         "Forecast Time": str(dt),
         "Data Format": f"[Longitude, Latitude, weighted_flux]",
-        "coordinates": parsed_data
+        "coordinates": parsed_data,
+        "type": "MultiPoint",
     }
 
     # logger.debug('success calculated')
     return JsonResponse(result, safe=False)
 
+
+# @LogWithCprofile('weighted_flux_interpolated')
 def get_weighted_flux_interpolated(request):
     """
     Отдаем json с данными для построения графиков из
@@ -377,7 +420,8 @@ def get_weighted_flux_interpolated(request):
         "Observation Time": [str(oi.startdt), str(oi.enddt)],
         "Forecast Time": str(dt),
         "Data Format": f"[Longitude, Latitude, weighted_flux]",
-        "coordinates": parsed_data_sorted
+        "coordinates": parsed_data_sorted,
+        "type": "MultiPoint",
     }
 
     # logger.debug('success calculated')
@@ -434,7 +478,8 @@ def get_seasonal_flux(request):
         "Observation Time": now_str,
         "Forecast Time": str(dt),
         "Data Format": f"[Longitude, Latitude, seasonal_flux]",
-        "coordinates": parsed_data
+        "coordinates": parsed_data,
+        "type": "MultiPoint",
     }
 
     # logger.debug('success calculated')

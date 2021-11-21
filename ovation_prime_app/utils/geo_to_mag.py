@@ -2,12 +2,13 @@ import datetime
 
 import math
 import numpy as np
-from pyIGRF.loadCoeffs import get_coeffs
 
 from ovation_prime_app.utils.date_to_year import date_to_year
+from ovation_prime_app.utils.igrf import get_coeffs_cached
+
 
 def geo_2_mag_fixed(latGEO: float, longGEO: float, altGEO: float, dt: datetime.datetime) -> [float, float]:
-    g, h = get_coeffs(date_to_year(dt))
+    g, h = get_coeffs_cached(date_to_year(dt))
 
     h11 = h[1][1]
     g11 = g[1][1]

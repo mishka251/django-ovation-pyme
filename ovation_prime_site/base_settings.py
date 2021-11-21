@@ -183,4 +183,4 @@ PROXY_API_URL = 'https://app.zenscrape.com/api/v1/get'
 
 N_LATITUDES = list(np.arange(0, 89.9, 1, dtype=np.float))+[89.9]
 S_LATITUDES = list(np.arange(-89.9, 0, 1, dtype=np.float))
-LONGITUDES = list(np.arange(-180, 177 + 1, 2.5, dtype=np.float))
+LONGITUDES = list(np.arange(-180, 180, 1, dtype=np.float))
