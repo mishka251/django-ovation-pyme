@@ -1,9 +1,9 @@
 import datetime
 import math
 import numpy as np
-from pyIGRF.loadCoeffs import get_coeffs
 
 from ovation_prime_app.utils.date_to_year import date_to_year
+from ovation_prime_app.utils.igrf import get_coeffs_cached
 
 
 def mag_to_geo(latMAG_degrees: float, longMAG_degrees: float, dt: datetime.datetime) -> 'tuple[float, float, float]':
@@ -42,7 +42,7 @@ def mag_to_geo(latMAG_degrees: float, longMAG_degrees: float, dt: datetime.datet
     _g11 = -1501  # Сферические гармонические коэффициенты для эпохи 2015-2020
     _g10 = -29442  #
 
-    g, h = get_coeffs(date_to_year(dt))
+    g, h = get_coeffs_cached(date_to_year(dt))
 
     h11 = h[1][1]
     g11 = g[1][1]
