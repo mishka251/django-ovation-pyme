@@ -173,7 +173,7 @@ def check_duplicates(data: 'list[CoordinatesValue]') -> 'list[CoordinatesValue]'
     return result
 
 
-@LogWithCprofile('conductance_interpolated')
+# @LogWithCprofile('conductance_interpolated')
 def get_ovation_prime_conductance_interpolated(request):
     """
     Отдаем json с данными для построения одного из графиков
@@ -251,7 +251,7 @@ def get_ovation_prime_conductance_interpolated(request):
     return JsonResponse(result, safe=False)
 
 
-@LogWithCprofile('prime_conductance')
+# @LogWithCprofile('prime_conductance')
 def get_ovation_prime_conductance(request):
     """
     Отдаем json с данными для построения одного из графиков
@@ -312,7 +312,7 @@ def get_ovation_prime_conductance(request):
     return JsonResponse(result, safe=False)
 
 
-@LogWithCprofile('weighted_flux')
+# @LogWithCprofile('weighted_flux')
 def get_weighted_flux(request):
     """
     Отдаем json с данными для построения графиков из
@@ -364,7 +364,7 @@ def get_weighted_flux(request):
     return JsonResponse(result, safe=False)
 
 
-@LogWithCprofile('weighted_flux_interpolated')
+# @LogWithCprofile('weighted_flux_interpolated')
 def get_weighted_flux_interpolated(request):
     """
     Отдаем json с данными для построения графиков из
