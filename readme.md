@@ -3,12 +3,12 @@ Web API implementation form OvationPrime model with python and django
 
 Установка
 ```bash
-pip -e install git+https://github.com/mishka251/django-ovation-pyme.git@{VERSION}#egg=django-ovation-prime
+pip install -e git+https://github.com/mishka251/django-ovation-pyme.git@{VERSION}#egg=django-ovation-prime
 ```
 
 (на примере версии 0.1.1)
 ```bash
-pip -e install git+https://github.com/mishka251/django-ovation-pyme.git@0.1.1#egg=django-ovation-prime
+pip install -e git+https://github.com/mishka251/django-ovation-pyme.git@0.1.1#egg=django-ovation-prime
 ```
 
 Подключение к проекту:
