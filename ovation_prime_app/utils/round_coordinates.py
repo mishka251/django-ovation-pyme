@@ -5,8 +5,8 @@ def round_coordinates_tuple(coords: CoordinatesValue) -> CoordinatesValue:
     lat, lon, val = coords
     lat = round(lat, 0)
     lon = round(lon, 0)
-    val = round(val, 1)
-    return CoordinatesValue(lat, lon, val)
+    val2 = 2 * round(val / 2, 1)
+    return CoordinatesValue(lat, lon, val2)
 
 
 def round_coordinates(coordinates: 'list[CoordinatesValue]') -> 'list[CoordinatesValue]':
