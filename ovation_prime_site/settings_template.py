@@ -32,3 +32,6 @@ DATABASES = {
 }
 # ключ для прокси-сервера
 PROXY_API_KEY = ''
+
+YA_DISK_TOKEN = ''
+YA_DISK_DIR = ''
