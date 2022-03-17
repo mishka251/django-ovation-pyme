@@ -1,11 +1,12 @@
 import datetime
+import logging
 
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 import time
 
 from nasaomnireader.omnireader import omni_downloader
-
+log = logging.getLogger(__name__)
 
 def add_month(dt: datetime.date) -> datetime.date:
     if dt.month == 12:
@@ -66,10 +67,10 @@ class Command(BaseCommand):
 
             dt = start_dt
             while dt <= end_dt:
-                print(f"download {dt}, {cadence}, {cdf_or_txt}")
+                log.debug(f"download {dt}, {cadence}, {cdf_or_txt}")
                 downloader.load_from_nasa_to_yadisk(dt, cadence, proxy_key=PROXY_API_KEY, proxy_url=PROXY_API_URL)
 
-                print(f"downloaded {dt}, {cadence}, {cdf_or_txt}")
+                log.debug(f"downloaded {dt}, {cadence}, {cdf_or_txt}")
                 dt = step(dt)
                 time.sleep(2)
 
@@ -77,7 +78,7 @@ class Command(BaseCommand):
         start_dt = options['start_dt']
         end_dt = options['end_dt']
         cdf_or_txt = options['cdf_or_txt']
-        print(start_dt, end_dt, cdf_or_txt)
+        log.debug(f'run actualize_yd: {start_dt}, {end_dt}, {cdf_or_txt}')
         if cdf_or_txt is None:
             for cdf_or_txt in self.cdf_or_txts:
                 self._load(cdf_or_txt, start_dt, end_dt)

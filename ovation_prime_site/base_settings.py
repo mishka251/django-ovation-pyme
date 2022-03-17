@@ -140,7 +140,10 @@ LOGGING = {
         },
         'file': {
             'level': 'DEBUG',
-            'class': 'logging.FileHandler',
+            'class': 'logging.handlers.TimedRotatingFileHandler',
+            'when': 'midnight',
+            'interval': 1,  # defaults to 1, only necessary for other values
+            'backupCount': 0,  # 0 = ни один бекап не удаляется автоматически
             'filename': BASE_DIR / 'logs' / 'debug.log',
             'formatter': 'verbose'
         },
