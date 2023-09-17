@@ -7,5 +7,6 @@ urlpatterns = [
     path('api/v1/weighted_flux/', views.get_weighted_flux),
     path('api/v1/weighted_flux_interpolated/', views.get_weighted_flux_interpolated),
     path('api/v1/seasonal_flux/', views.get_seasonal_flux),
+    path('api/v1/geo_to_mlt/', views.geo_to_mlt),
 ]
 

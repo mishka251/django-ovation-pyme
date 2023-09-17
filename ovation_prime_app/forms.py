@@ -1,4 +1,4 @@
-from django.forms import Form, DateTimeField, ChoiceField, DecimalField
+from django.forms import Form, DateTimeField, ChoiceField, DecimalField, FloatField
 
 
 class OvationPrimeConductanceForm(Form):
@@ -31,3 +31,11 @@ class SeasonalFluxForm(Form):
     seasonS = ChoiceField(choices=season_choices, initial='winter', required=False)
 
     dF = DecimalField(required=False, initial=2134.17)
+
+
+class GeoToMLTForm(Form):
+    dt = DateTimeField(required=True)
+    lat = FloatField(min_value=-90, max_value=90)
+    lon = FloatField(min_value=-180, max_value=180)
+
+
