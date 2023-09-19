@@ -10,7 +10,7 @@ import os
 
 import numpy as np
 
-from ovation_prime_app.forms import OvationPrimeConductanceForm, WeightedFluxForm, SeasonalFluxForm
+from ovation_prime_app.forms import OvationPrimeConductanceForm, WeightedFluxForm, SeasonalFluxForm, GeoToMLTForm
 from ovation_prime_app.my_types import CoordinatesValue
 from ovation_prime_app.utils.fill_zeros import fill_zeros
 from ovation_prime_app.utils.grids_to_dicts import grids_to_dicts
@@ -89,14 +89,7 @@ def create_mag_grids(dt: datetime.datetime, geo_lons: 'list[float]', geo_lats: '
             geo_lat = geo_lats[j]
             geo_lon = geo_lons[i]
 
-            geo_lat_rads = math.radians(geo_lat)
-            geo_lon_rads = math.radians(geo_lon)
-
-            alt = 0
-
-            latMAG_degrees, longMAG_degrees = geo_2_mag_fixed(geo_lat_rads, geo_lon_rads, alt, dt)
-
-            mlt = aacgmv2.convert_mlt(longMAG_degrees, dt, False)[0]
+            latMAG_degrees, longMAG_degrees, mlt = _geo_to_mlt(dt, geo_lat, geo_lon)
 
             mag_lats[i][j] = latMAG_degrees
             mlts[i][j] = mlt
@@ -121,6 +114,15 @@ def create_mag_grids(dt: datetime.datetime, geo_lons: 'list[float]', geo_lats: '
             #     back_long_geo_rads - geo_lon_rads - 2 * math.pi) < 1e-4, f'{geo_lat=}, {geo_lon=}, {back_lat_geo_rads=}, {geo_lat_rads=}, {back_long_geo_rads=}, {geo_lon_rads=}, {i=}, {j=}, {longMAG_degrees=}, {latMAG_degrees=},{back_mlon_degrees=}, {mlt=}'
 
     return mag_lats, mlts
+
+
+def _geo_to_mlt(dt, geo_lat, geo_lon):
+    geo_lat_rads = math.radians(geo_lat)
+    geo_lon_rads = math.radians(geo_lon)
+    alt = 0
+    latMAG_degrees, longMAG_degrees = geo_2_mag_fixed(geo_lat_rads, geo_lon_rads, alt, dt)
+    mlt = aacgmv2.convert_mlt(longMAG_degrees, dt, False)[0]
+    return latMAG_degrees, longMAG_degrees, mlt
 
 
 def create_north_grids(dt: datetime.datetime):
@@ -484,3 +486,24 @@ def get_seasonal_flux(request):
 
     # logger.debug('success calculated')
     return JsonResponse(result, safe=False)
+
+
+
+
+def geo_to_mlt(request):
+    form = GeoToMLTForm(request.GET)
+    is_valid = form.is_valid()
+    if not is_valid:
+        return HttpResponseBadRequest(form.errors.as_json())
+
+    dt = form.cleaned_data["dt"]
+    lat = form.cleaned_data["lat"]
+    lon = form.cleaned_data["lon"]
+
+    latMAG_degrees, longMAG_degrees, mlt = _geo_to_mlt(dt, lat, lon)
+    result = {
+        "lat": latMAG_degrees,
+        "lon": longMAG_degrees,
+        "mlt": mlt,
+    }
+    return JsonResponse(result)
